@@ -1,48 +1,46 @@
 # 🌧️ Real-Time Precipitation Interpolation and Mapping Platform
 
-This repository hosts a **real-time open-source geospatial framework** for acquiring and interpolating precipitation data from meteorological stations and visualizing it dynamically in a WebGIS environment. The system is designed as a scientific and operational tool to support hydrogeological risk monitoring using Python, PostgreSQL/PostGIS, and open geospatial APIs.
+This repository hosts a **real-time open-source geospatial framework** for acquiring and interpolating precipitation data from meteorological stations and visualizing it dynamically in a 3D WebGIS environment. The system supports hydrogeological risk monitoring using Python, PostgreSQL/PostGIS, CesiumJS, and open geospatial services.
 
 🔬 **Developed for**: *A framework for dynamic mapping of precipitations using open-source 3D-WebGIS technology*
+
+---
 
 ## 📌 Overview
 
 This platform performs:
-1. **Real-time acquisition** of pluviometric data from ItaliaMeteo stations (via [Meteohub API](https://meteohub.mistralportal.it/)).
-2. **Storage** of point data in a PostGIS-enabled PostgreSQL database.
-3. **Dynamic raster interpolation** using Inverse Distance Weighting (IDW) via Python and SciPy.
-4. **Raster output generation** for use in GIS or publishing via WMS (e.g., MapServer, GeoServer).
-5. **Optional real-time 3D WebGIS visualization** using CesiumJS and WMS layers.
+1. **Real-time acquisition** of rainfall data from ItaliaMeteo stations.
+2. **Storage** in a PostGIS-enabled PostgreSQL database.
+3. **Raster interpolation** using Inverse Distance Weighting (IDW).
+4. **Raster output generation** and database import.
+5. **WebGIS visualization** of interpolated layers using CesiumJS + MapServer WMS.
 
-## 🗂 Repository Structure
+---
+
+## 🗂 Repository Contents
 
 ```
-├── dynamic_precipitation_data_acquisition.py     # Script for real-time acquisition and DB insertion
-├── dynamic_interpolation_raster_generation.py    # Script for raster interpolation and DB insertion
-├── reference_4326.tif                             # (User-provided) reference raster used as interpolation grid
-├── README.md                                      # Project documentation
+├── dynamic_precipitation_data_acquisition.py     # Real-time acquisition and DB insertion
+├── dynamic_interpolation_raster_generation.py    # IDW interpolation, smoothing, raster generation
+├── interpolation.map                             # MapServer config file for WMS exposure
+├── index.html                                     # WebGIS viewer with CesiumJS
+├── reference_4326.tif                             # Grid template raster (user-provided)
+├── README_precipitation_platform.txt              # This documentation
 ```
+
+---
 
 ## ⚙️ Requirements
 
-### 🐍 Python Libraries
-
-Install with:
+### 🐍 Python
+Install libraries:
 ```bash
 pip install pandas numpy scipy psycopg2-binary requests rasterio matplotlib scikit-learn
 ```
 
 ### 🐘 PostgreSQL/PostGIS
-- PostgreSQL 14+ with PostGIS enabled
-- Table: `weather_observations` (see below for schema)
-
-### 🗺️ Raster tools
-- `raster2pgsql` and `psql` (included in PostGIS bundle) for raster import
-
-## 🛠️ Setup
-
-### 1. Database Setup
-
-Create the required table in PostGIS:
+- PostgreSQL 14+ with PostGIS extension
+- Table schema:
 ```sql
 CREATE TABLE weather_observations (
     station_id TEXT,
@@ -53,64 +51,77 @@ CREATE TABLE weather_observations (
 );
 ```
 
-You may also need to run:
-```sql
-CREATE INDEX weather_geom_idx ON weather_observations USING GIST (geom);
-```
+### 🗺️ Raster Tools
+- `raster2pgsql` and `psql` (PostGIS bundle)
+- MapServer (e.g., MS4W)
+- CesiumJS (v1.89 or later)
 
-### 2. Reference Raster
+---
 
-Place a reference GeoTIFF named `reference_4326.tif` in the project root, using EPSG:4326. This raster defines the spatial resolution and extent of the interpolation grid.
+## 🚀 Workflow
 
-## 🚀 How to Run
+### 1. Acquire Precipitation Data
 
-### Step 1: Real-Time Data Acquisition
-
-Run the script to fetch the latest hour of rainfall data and insert valid stations into the database:
 ```bash
 python dynamic_precipitation_data_acquisition.py
 ```
 
-> ✅ Ensures completeness: only runs DB insert if all critical stations are present.
+> ✅ Only inserts if all required stations are found.
 
-### Step 2: Interpolation and Raster Generation
-
-Run the interpolation script to:
-- Fetch latest simultaneous timestamp with ≥7 stations
-- Perform IDW interpolation
-- Normalize and smooth raster
-- Store final output as `interpolated.tif`
-- Insert the raster into PostGIS via `raster2pgsql`
+### 2. Interpolate and Generate Raster
 
 ```bash
 python dynamic_interpolation_raster_generation.py
 ```
 
-## 📊 Interpolation Details
+- Fetches most recent `observed_at` timestamp with ≥7 stations.
+- Interpolates via IDW (`power=2`, `k=4`)
+- Normalizes and smooths with Gaussian filter
+- Saves and imports raster into PostGIS (`interpolated` table)
 
-- **Method**: Inverse Distance Weighting (IDW)
-- **Parameters**:
-  - `power=2`: Exponent controlling spatial decay
-  - `k=4`: Number of nearest neighbors
-- **Post-Processing**: Gaussian smoothing and min-max normalization
+---
 
-## 🌍 Integration in WebGIS
+## 🌍 WebGIS Visualization
 
-For 3D visualization, the raster can be served via:
+### A. MapServer Setup
 
-- **GeoServer** for static rasters
-- **MapServer** for real-time PostGIS raster layers
+`interpolation.map` configures WMS exposure of the `interpolated` raster:
+- Reads from PostGIS using:
+  ```plaintext
+  CONNECTIONTYPE POSTGIS
+  DATA "PG:host=localhost port=5432 ... table=interpolated column=rast mode=2"
+  ```
+- Colorized with a defined `COLORMAP`
+- Accessible at:
+  ```
+  http://localhost:8083/cgi-bin/mapserv.exe?map=/ms4w/apps/susceptibility/interpolation.map&service=WMS&version=1.1.1&request=GetCapabilities
+  ```
 
-And visualized in **CesiumJS** through WMS links.
+### B. CesiumJS WebGIS
+
+Open `index.html` to launch the 3D viewer (host via Apache or localhost):
+
+- Loads WMS via `Cesium.WebMapServiceImageryProvider`
+- Zooms to Palermo (Italy)
+- Selects `interpolated` raster layer from MapServer
+
+```html
+layers: 'interpolated',
+url: 'http://localhost:8083/cgi-bin/mapserv.exe?...'
+```
+
+---
 
 ## 🛰️ Data Source
 
-- **Weather API**: [MeteoHub](https://meteohub.mistralportal.it/api/observations)
-- **Monitored Stations**: 
-  - `'scl016'`, `'Palermo SIAS'`, `'scl069'`, `'scl088'`, `'scl148'`, `'scl421'`, `'scl040'`, `'scl396'`
+- **API**: [MeteoHub](https://meteohub.mistralportal.it/)
+- **Stations**: `'scl016'`, `'Palermo SIAS'`, `'scl069'`, `'scl088'`, `'scl148'`, `'scl421'`, `'scl040'`, `'scl396'`
 
 
+
+---
 
 ## 📝 License
 
-This project is licensed under the [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/) license.
+Licensed under [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/)
+
