@@ -1,0 +1,59 @@
+MAP
+  NAME "interpolation"
+  STATUS ON
+  EXTENT 13.28 38.06 13.44 38.18  # <- adjust according to your real raster bbox
+  SIZE 800 600
+  UNITS DD
+  SHAPEPATH "data"
+  #IMAGECOLOR 255 255 255
+
+  WEB
+    METADATA
+      "wms_title"           "Interpolation Raster WMS"
+      "wms_onlineresource"  "http://localhost:8083/cgi-bin/mapserv.exe?map=/ms4w/apps/susceptibility/interpolation.map&service=WMS&version=1.1.1&request=GetCapabilities"
+      "wms_srs"             "EPSG:4326"
+      "wms_enable_request"  "*"
+    END
+  END
+
+  PROJECTION
+    "init=epsg:4326"
+  END
+
+LAYER
+  NAME "interpolated"
+  TYPE RASTER
+  STATUS ON
+
+  CONNECTIONTYPE POSTGIS
+   #CONNECTION "host=localhost port=5432 dbname=postgis_35_sample user=postgres password=password"
+  DATA "PG:host=localhost port=5432 sslmode=disable user=postgres password=password dbname=postgis_35_sample schema=public table=interpolated column=rast mode=2"
+ # DATA "rast FROM (SELECT rid, rast FROM interpolated) AS subquery USING UNIQUE rid USING srid=4326"
+
+  EXTENT 13.28 38.06 13.44 38.18
+
+
+     PROCESSING "BANDS=1"
+     PROCESSING "SCALE=-0.1,0.62"
+     PROCESSING "SCALE_BUCKETS=255"
+     PROCESSING "ALPHABAND=YES"
+     PROCESSING "NODATA=0"
+     PROCESSING "COLORMAP=0.0 0 255 0 255, 0.3 255 255 0 255, 0.62 255 0 0 255, 0 0 0 0"
+     OFFSITE 0 0 0
+  PROJECTION
+    "init=epsg:4326"
+  END
+  COMPOSITE
+    OPACITY 70
+  END # COMPOSITE
+  METADATA
+    "wms_title" "Interpolation"
+  END
+END
+DEBUG 5
+CONFIG "MS_ERRORFILE" "/ms4w/tmp/ms_error.log"
+
+
+
+
+END
